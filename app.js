@@ -9,6 +9,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // UTF-8 安全的 Base64 編碼與解碼（支援中文無痛轉換）
+  function encodeTripData(data) {
+    const jsonStr = JSON.stringify(data);
+    return btoa(encodeURIComponent(jsonStr));
+  }
+
+  function decodeTripData(encodedStr) {
+    const jsonStr = decodeURIComponent(atob(encodedStr));
+    return JSON.parse(jsonStr);
+  }
+
   // ==========================================
   // 1. 首頁 index.html 邏輯
   // ==========================================
@@ -120,13 +131,38 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 2. 總覽頁 view.html 邏輯
+  // 2. 總覽頁 view.html 邏輯（含自動載入分享連結與分享按鈕）
   // ==========================================
   const bookTitle = document.getElementById('bookTitle');
   const timelineList = document.getElementById('timelineList');
+  const shareTripBtn = document.getElementById('shareTripBtn');
 
   if (bookTitle && timelineList) {
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sharedDataParam = urlParams.get('data');
+
+      // 如果網址帶有分享資料（例如被別人打開時）
+      if (sharedDataParam) {
+        try {
+          const importedBook = decodeTripData(sharedDataParam);
+          
+          // 自動儲存到當前使用者的本機庫
+          const allBooks = getStoredBooks();
+          const exists = allBooks.some(b => b.id === importedBook.id);
+          if (!exists) {
+            allBooks.unshift(importedBook);
+            localStorage.setItem('all_chitrip_books', JSON.stringify(allBooks));
+          }
+          localStorage.setItem('current_chitrip_book', JSON.stringify(importedBook));
+          
+          // 清除網址列長參數以保持乾淨
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {
+          console.error("解析分享連結失敗", e);
+        }
+      }
+
       const rawData = localStorage.getItem('current_chitrip_book');
       if (!rawData) {
         bookTitle.innerText = "尚未選擇行程";
@@ -134,6 +170,24 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         const savedData = JSON.parse(rawData);
         bookTitle.innerText = savedData.title || "我的旅遊小書";
+
+        // 分享按鈕邏輯
+        if (shareTripBtn) {
+          shareTripBtn.addEventListener('click', () => {
+            const encoded = encodeTripData(savedData);
+            const shareUrl = `${window.location.origin}${window.location.pathname}?data=${encoded}`;
+
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(shareUrl).then(() => {
+                alert('✨ 行程分享連結已複製到剪貼簿！可以傳給朋友囉！');
+              }).catch(() => {
+                prompt('請手動複製以下行程連結：', shareUrl);
+              });
+            } else {
+              prompt('請手動複製以下行程連結：', shareUrl);
+            }
+          });
+        }
 
         const days = [...new Set(savedData.items.map(item => item.day))];
         timelineList.innerHTML = '';

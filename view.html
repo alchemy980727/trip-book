@@ -29,7 +29,12 @@
       padding: 24px;
       box-sizing: border-box;
     }
-    .nav-bar { margin-bottom: 20px; }
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
     .back-btn {
       background: #f2f4f7;
       color: var(--text);
@@ -42,6 +47,24 @@
       transition: background 0.2s;
     }
     .back-btn:hover { background: #e5e5ea; }
+    
+    /* 分享按鈕 */
+    .share-btn {
+      background: #eef6ff;
+      color: var(--primary);
+      border: 1px solid #cce5ff;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .share-btn:hover { background: #dbeafe; }
+
     .header {
       text-align: center;
       padding-bottom: 18px;
@@ -61,7 +84,6 @@
       position: relative;
       padding-left: 38px;
     }
-    /* 背景藍色虛線 */
     .flow-wrapper::before {
       content: '';
       position: absolute;
@@ -88,7 +110,6 @@
       box-shadow: 0 6px 18px rgba(0,122,255,0.12);
       transform: translateY(-1px);
     }
-    /* 圓圈數字節點 */
     .flow-node-num {
       position: absolute;
       left: -38px;
@@ -136,6 +157,7 @@
 <div class="book-container">
   <div class="nav-bar">
     <a href="index.html" class="back-btn">⬅️ 行程列表</a>
+    <button id="shareTripBtn" class="share-btn">🔗 分享行程</button>
   </div>
 
   <div class="header">
