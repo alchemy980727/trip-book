@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-  // 通用功能：取得所有歷史紀錄
   function getStoredBooks() {
     try {
       return JSON.parse(localStorage.getItem('all_chitrip_books')) || [];
@@ -9,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // UTF-8 安全的 Base64 編碼與解碼（支援中文無痛轉換）
   function encodeTripData(data) {
     const jsonStr = JSON.stringify(data);
     return btoa(encodeURIComponent(jsonStr));
@@ -131,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 2. 總覽頁 view.html 邏輯（含自動載入分享連結與分享按鈕）
+  // 2. 總覽頁 view.html 邏輯
   // ==========================================
   const bookTitle = document.getElementById('bookTitle');
   const timelineList = document.getElementById('timelineList');
@@ -142,12 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const urlParams = new URLSearchParams(window.location.search);
       const sharedDataParam = urlParams.get('data');
 
-      // 如果網址帶有分享資料（例如被別人打開時）
       if (sharedDataParam) {
         try {
           const importedBook = decodeTripData(sharedDataParam);
-          
-          // 自動儲存到當前使用者的本機庫
           const allBooks = getStoredBooks();
           const exists = allBooks.some(b => b.id === importedBook.id);
           if (!exists) {
@@ -155,8 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('all_chitrip_books', JSON.stringify(allBooks));
           }
           localStorage.setItem('current_chitrip_book', JSON.stringify(importedBook));
-          
-          // 清除網址列長參數以保持乾淨
           window.history.replaceState({}, document.title, window.location.pathname);
         } catch (e) {
           console.error("解析分享連結失敗", e);
@@ -171,7 +164,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedData = JSON.parse(rawData);
         bookTitle.innerText = savedData.title || "我的旅遊小書";
 
-        // 分享按鈕邏輯
         if (shareTripBtn) {
           shareTripBtn.addEventListener('click', () => {
             const encoded = encodeTripData(savedData);
@@ -179,12 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (navigator.clipboard) {
               navigator.clipboard.writeText(shareUrl).then(() => {
-                alert('✨ 行程分享連結已複製到剪貼簿！可以傳給朋友囉！');
+                alert('✨ 行程分享連結已複製！可以傳給朋友囉！');
               }).catch(() => {
-                prompt('請手動複製以下行程連結：', shareUrl);
+                prompt('請複製以下行程連結：', shareUrl);
               });
             } else {
-              prompt('請手動複製以下行程連結：', shareUrl);
+              prompt('請複製以下行程連結：', shareUrl);
             }
           });
         }
@@ -224,10 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 3. 詳細頁 day.html 邏輯
+  // 3. 詳細頁 day.html 邏輯（支援渲染 PDF 表格）
   // ==========================================
   const dayPageTitle = document.getElementById('dayPageTitle');
   const dayScheduleContent = document.getElementById('dayScheduleContent');
+  const pdfHeaderTitle = document.getElementById('pdfHeaderTitle');
+  const pdfTableBody = document.getElementById('pdfTableBody');
 
   if (dayPageTitle && dayScheduleContent) {
     try {
@@ -241,10 +235,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedData = JSON.parse(rawData);
         dayPageTitle.innerText = selectedDay;
 
+        if (pdfHeaderTitle) {
+          pdfHeaderTitle.innerText = `${savedData.title || '旅遊小書'} - ${selectedDay} 日程表`;
+        }
+
         const filteredItems = savedData.items.filter(item => item.day === selectedDay);
+        
+        // 渲染網頁畫面時間線
         dayScheduleContent.innerHTML = '';
+        // 清空 PDF 表格
+        if (pdfTableBody) pdfTableBody.innerHTML = '';
 
         filteredItems.forEach((item, index) => {
+          // 1. 產生網頁卡片
           const block = document.createElement('div');
           block.className = 'spot-block';
           block.innerHTML = `
@@ -273,6 +276,17 @@ document.addEventListener('DOMContentLoaded', () => {
               </a>
             `;
             dayScheduleContent.appendChild(transitBox);
+          }
+
+          // 2. 產生 PDF 表格列
+          if (pdfTableBody) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${item.time}</td>
+              <td><strong>${item.spotName}</strong></td>
+              <td>${item.duration || '-'}</td>
+            `;
+            pdfTableBody.appendChild(tr);
           }
         });
       }

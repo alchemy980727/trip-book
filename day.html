@@ -29,7 +29,12 @@
       padding: 24px;
       box-sizing: border-box;
     }
-    .nav-bar { margin-bottom: 20px; }
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
     .back-btn {
       background: #f2f4f7;
       color: var(--text);
@@ -42,6 +47,24 @@
       transition: background 0.2s;
     }
     .back-btn:hover { background: #e5e5ea; }
+    
+    /* PDF 按鈕 */
+    .pdf-btn {
+      background: #ff950015;
+      color: #ff9500;
+      border: 1px solid #ffe0b2;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .pdf-btn:hover { background: #ffe0b2; }
+
     .header {
       text-align: center;
       padding-bottom: 14px;
@@ -56,7 +79,7 @@
       letter-spacing: -0.3px;
     }
 
-    /* 時間線 */
+    /* 時間線樣式 */
     .timeline {
       position: relative;
       padding-left: 26px;
@@ -130,9 +153,59 @@
       text-decoration: none;
       transition: all 0.2s;
     }
-    .transit-btn:hover {
-      background: #ffedd5;
-      transform: translateY(-1px);
+
+    /* PDF 專用隱藏視窗（僅在列印時顯示） */
+    .print-only { display: none; }
+
+    /* 📄 PDF 列印排版設定 */
+    @media print {
+      body {
+        background: white !important;
+        padding: 0 !important;
+        color: black !important;
+      }
+      .book-container {
+        box-shadow: none !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+      }
+      .nav-bar, .timeline { display: none !important; }
+      
+      .print-only {
+        display: block !important;
+        padding: 20px;
+      }
+      .pdf-title {
+        text-align: center;
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+      }
+      .pdf-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 16px;
+      }
+      .pdf-table th, .pdf-table td {
+        border: 1px solid #ccc;
+        padding: 10px;
+        text-align: left;
+        font-size: 14px;
+      }
+      .pdf-table th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+      .pdf-transit-note {
+        font-size: 12px;
+        color: #555;
+        background: #f9f9f9;
+        padding: 8px 12px;
+        border-left: 4px solid #007aff;
+        margin-top: 10px;
+      }
     }
   </style>
 </head>
@@ -141,13 +214,33 @@
 <div class="book-container">
   <div class="nav-bar">
     <a href="view.html" class="back-btn">⬅️ 返總覽</a>
+    <button onclick="window.print()" class="pdf-btn">📄 匯出 PDF</button>
   </div>
 
   <div class="header">
     <h1 class="day-title" id="dayPageTitle">載入中...</h1>
   </div>
 
+  <!-- 網頁畫面的時間線 -->
   <div id="dayScheduleContent" class="timeline"></div>
+
+  <!-- PDF / 列印專用簡易日程表 -->
+  <div class="print-only">
+    <h2 class="pdf-title" id="pdfHeaderTitle">簡易日程表</h2>
+    <table class="pdf-table">
+      <thead>
+        <tr>
+          <th style="width: 20%;">時間</th>
+          <th style="width: 55%;">景點名稱</th>
+          <th style="width: 25%;">停留時間</th>
+        </tr>
+      </thead>
+      <tbody id="pdfTableBody"></tbody>
+    </table>
+    <div class="pdf-transit-note">
+      💡 <strong>建議交通方式：</strong>景點間建議搭配公車、捷運等大眾運輸，或使用計程車/步行接駁。
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>
