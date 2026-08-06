@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>詳細行程 - 旅遊小書</title>
+  <style>
+    :root {
+      --primary: #007aff;
+      --bg: #f2f4f7;
+      --card: #ffffff;
+      --text: #1c1c1e;
+      --sub-text: #8e8e93;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 24px 16px;
+      color: var(--text);
+    }
+    .book-container {
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--card);
+      min-height: 90vh;
+      border-radius: 24px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .nav-bar { margin-bottom: 20px; }
+    .back-btn {
+      background: #f2f4f7;
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 20px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      display: inline-block;
+      transition: background 0.2s;
+    }
+    .back-btn:hover { background: #e5e5ea; }
+    .header {
+      text-align: center;
+      padding-bottom: 14px;
+      margin-bottom: 24px;
+      border-bottom: 1px dashed #e5e5ea;
+    }
+    .day-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0;
+      color: var(--primary);
+      letter-spacing: -0.3px;
+    }
+
+    /* 時間線 */
+    .timeline {
+      position: relative;
+      padding-left: 26px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      top: 12px;
+      bottom: 24px;
+      left: 7px;
+      width: 2px;
+      background: #e5e5ea;
+    }
+    .spot-block {
+      position: relative;
+      margin-bottom: 18px;
+    }
+    .spot-block::before {
+      content: '';
+      position: absolute;
+      left: -23px;
+      top: 16px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2.5px solid white;
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .card {
+      background: #f8f9fa;
+      border: 1px solid #eef0f2;
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .time { font-size: 14px; font-weight: 800; color: var(--primary); }
+    .duration { font-size: 11px; font-weight: 600; background: #eef2f5; padding: 3px 8px; border-radius: 6px; color: var(--sub-text); }
+    .spot-name { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
+    .map-btn {
+      font-size: 13px;
+      color: #34c759;
+      text-decoration: none;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* 交通按鈕 */
+    .transit-box {
+      margin: 10px 0 20px 0;
+      padding-left: 2px;
+    }
+    .transit-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fff8f0;
+      border: 1px solid #ffe0b2;
+      color: #d97706;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .transit-btn:hover {
+      background: #ffedd5;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+
+<div class="book-container">
+  <div class="nav-bar">
+    <a href="view.html" class="back-btn">⬅️ 返總覽</a>
+  </div>
+
+  <div class="header">
+    <h1 class="day-title" id="dayPageTitle">載入中...</h1>
+  </div>
+
+  <div id="dayScheduleContent" class="timeline"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
