@@ -4,8 +4,9 @@ const STORAGE_KEY = 'my_travel_book_trips';
 // 預設範例行程
 const defaultTrips = [
   {
-    id: 'demo_kansai',
-    title: '阪京 5 日自由行',
+    id: 'demo_japan',
+    title: '日本自由行',
+    members: ['小明', '小華'],
     days: [
       {
         name: 'Day 1: 抵達大阪與心齋橋',
@@ -42,7 +43,9 @@ function getSavedTrips() {
     return defaultTrips;
   }
   try {
-    return JSON.parse(data);
+    const trips = JSON.parse(data);
+    trips.forEach(t => { if (!t.members) t.members = []; });
+    return trips;
   } catch (e) {
     return defaultTrips;
   }
@@ -52,8 +55,35 @@ function saveTrips(trips) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trips));
 }
 
+// 動態注入 PDF 匯出隱藏樣式
+function injectPdfStyles() {
+  if (document.getElementById('pdf-export-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'pdf-export-styles';
+  style.innerHTML = `
+    @media print {
+      body.pdf-export-mode .polaroid-box,
+      body.pdf-export-mode #expenseBlock,
+      body.pdf-export-mode .hide-on-export,
+      body.pdf-export-mode header,
+      body.pdf-export-mode footer,
+      body.pdf-export-mode button {
+        display: none !important;
+      }
+      body.pdf-export-mode .card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 // 頁面路由判斷
 document.addEventListener('DOMContentLoaded', () => {
+  injectPdfStyles();
+  
   const path = window.location.pathname;
   if (path.endsWith('index.html') || path === '/' || path.endsWith('/')) {
     renderIndexPage();
@@ -109,6 +139,7 @@ function renderIndexPage() {
       const newTrip = {
         id: 'trip_' + Date.now(),
         title: title,
+        members: ['我'],
         days: newDays
       };
 
@@ -154,12 +185,19 @@ function renderIndexPage() {
   }
 }
 
-// 增強版文字解析函數
+function cleanSpotName(rawName) {
+  if (!rawName) return '';
+  return rawName
+    .replace(/(\(|\（|\s|^)(\d+(?:\.\d+)?)\s*(小時|hr|hrs|min|分鐘|分)(\)|\）|\s|$)/gi, ' ')
+    .replace(/停留\s*\d+.*$/gi, '')
+    .replace(/^[-:\s()（）]+|[-:\s()（）]+$/g, '')
+    .trim();
+}
+
 function parseTextToTrip(text) {
   const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
   if (rawLines.length === 0) return null;
 
-  // 第一行為行程標題
   const tripTitle = rawLines[0];
   const contentLines = rawLines.slice(1);
 
@@ -229,10 +267,9 @@ function parseTextToTrip(text) {
             const m = String(totalMin % 60).padStart(2, '0');
             duration = `${h}時${m}分`;
           }
-          spotName = spotName.replace(durationMatch[0], ' ');
         }
 
-        spotName = spotName.replace(/^[-:\s()（）]+|[-:\s()（）]+$/g, '').trim();
+        spotName = cleanSpotName(spotName);
 
         if (spotName) {
           currentDay.spots.push({ time: spotTime, name: spotName, duration: duration });
@@ -244,7 +281,7 @@ function parseTextToTrip(text) {
   if (currentDay) days.push(currentDay);
   if (days.length === 0) return null;
 
-  return { id: 'trip_' + Date.now(), title: tripTitle, days: days };
+  return { id: 'trip_' + Date.now(), title: tripTitle, members: ['我'], days: days };
 }
 
 function formatTime(tStr) {
@@ -285,6 +322,56 @@ function renderViewPage() {
   const bookTitleEl = document.getElementById('bookTitle');
   if (bookTitleEl) bookTitleEl.innerText = trip.title;
 
+  // 渲染參與人員列：會議圓形風格、靠左、新增按鈕僅一個 + 號
+  let membersContainer = document.getElementById('tripMembersContainer');
+  if (!membersContainer) {
+    membersContainer = document.createElement('div');
+    membersContainer.id = 'tripMembersContainer';
+    membersContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 16px 0; justify-content: flex-start;';
+    if (bookTitleEl && bookTitleEl.parentNode) {
+      bookTitleEl.parentNode.insertBefore(membersContainer, bookTitleEl.nextSibling);
+    }
+  }
+
+  const renderMembersList = () => {
+    membersContainer.innerHTML = '';
+    if (!trip.members) trip.members = [];
+
+    trip.members.forEach((member, mIdx) => {
+      const avatar = document.createElement('div');
+      avatar.title = `${member} (點擊可刪除)`;
+      avatar.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; background: #eef4fb; color: #2b6cb0; border: 1px solid #90cdf4; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; cursor: pointer; position: relative;';
+      // 取名字最後一個字或前兩個字做為圓形簡称
+      const shortName = member.length > 2 ? member.slice(-2) : member;
+      avatar.innerText = shortName;
+
+      avatar.onclick = () => {
+        if (confirm(`確定要移除成員「${member}」嗎？`)) {
+          trip.members.splice(mIdx, 1);
+          saveTrips(history);
+          renderMembersList();
+        }
+      };
+      membersContainer.appendChild(avatar);
+    });
+
+    const addMemberBtn = document.createElement('button');
+    addMemberBtn.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #2b6cb0; border: 1px dashed #2b6cb0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; cursor: pointer;';
+    addMemberBtn.innerText = '+';
+    addMemberBtn.title = '新增參與人員';
+    addMemberBtn.onclick = () => {
+      const newName = prompt('請輸入參與人員名稱：');
+      if (newName && newName.trim()) {
+        trip.members.push(newName.trim());
+        saveTrips(history);
+        renderMembersList();
+      }
+    };
+    membersContainer.appendChild(addMemberBtn);
+  };
+
+  renderMembersList();
+
   const container = document.getElementById('timelineList');
   if (!container) return;
   
@@ -294,19 +381,20 @@ function renderViewPage() {
   trip.days.forEach((day, index) => {
     const card = document.createElement('div');
     card.className = 'flow-card';
+    card.style.position = 'relative'; // 讓右下角刪除按鈕可以絕對定位
     const spotNames = day.spots.length > 0 
-      ? day.spots.map(s => s.name).join(' → ') 
+      ? day.spots.map(s => cleanSpotName(s.name)).join(' → ') 
       : '尚無行程，點擊進行編輯';
     
-    // 限制預覽為單行文字 (ellipsis)
     card.innerHTML = `
       <div class="flow-node-num" id="node_${index}">${index + 1}</div>
       <div class="card-title">
         <span>${day.name}</span>
         <span style="font-size:12px; color:var(--primary)">編輯細節 ➔</span>
       </div>
-      <div class="card-preview" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${spotNames}</div>
-      <div class="badge">📍 共 ${day.spots.length} 個行程</div>
+      <div class="card-preview" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding-right: 24px;">${spotNames}</div>
+      <div class="badge" style="display:inline-block;">📍 共 ${day.spots.length} 個行程</div>
+      <button onclick="event.stopPropagation(); deleteDay(${tripIndex}, ${index})" style="position: absolute; bottom: 10px; right: 10px; background: none; border: none; color: #c2593f; font-size: 16px; font-weight: bold; cursor: pointer; padding: 4px;" title="刪除這天行程">✕</button>
     `;
 
     card.onclick = () => {
@@ -323,7 +411,7 @@ function renderViewPage() {
     addDayBtn = document.createElement('button');
     addDayBtn.id = 'addDayBtn';
     addDayBtn.className = 'action-btn';
-    addDayBtn.style.cssText = 'width: 100%; margin-top: 16px; background: #e8f4ec; color: #2e7d32; border: 1px dashed #81c784; padding: 10px; font-size: 13px; font-weight: bold; border-radius: 10px; cursor: pointer;';
+    addDayBtn.style.cssText = 'width: 100%; margin-top: 12px; background: #eef4fb; color: #2b6cb0; border: 1px dashed #90cdf4; padding: 6px 10px; font-size: 13px; font-weight: bold; border-radius: 8px; cursor: pointer;';
     addDayBtn.innerText = '➕ 為此行程新增天數 (Day)';
     container.after(addDayBtn);
   }
@@ -353,6 +441,31 @@ function renderViewPage() {
       navigator.clipboard.writeText(window.location.href);
       alert('已複製行程連結，快分享給朋友吧！');
     };
+
+    let exportFullPdfBtn = document.getElementById('exportFullPdfBtn');
+    if (!exportFullPdfBtn) {
+      exportFullPdfBtn = document.createElement('button');
+      exportFullPdfBtn.id = 'exportFullPdfBtn';
+      exportFullPdfBtn.className = 'action-btn';
+      exportFullPdfBtn.style.cssText = 'background: #2b6cb0; color: #fff; border: none; padding: 8px 12px; font-size: 13px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-left: 8px;';
+      exportFullPdfBtn.innerText = '📄 匯出 PDF (整趟行程)';
+      shareBtn.after(exportFullPdfBtn);
+    }
+    exportFullPdfBtn.onclick = () => exportFullTripPdf(trip);
+  }
+}
+
+function deleteDay(tripIndex, dayIndex) {
+  const history = getSavedTrips();
+  const trip = history[tripIndex];
+  if (trip.days.length <= 1) {
+    alert('每趟行程至少需要保留一天喔！');
+    return;
+  }
+  if (confirm(`確定要刪除「${trip.days[dayIndex].name}」這天行程嗎？`)) {
+    trip.days.splice(dayIndex, 1);
+    saveTrips(history);
+    renderViewPage();
   }
 }
 
@@ -404,6 +517,7 @@ function renderDayPage() {
   }
 
   dayData.spots.forEach((spot, idx) => {
+    const cleanName = cleanSpotName(spot.name);
     const block = document.createElement('div');
     block.className = 'spot-block';
     block.setAttribute('data-id', idx);
@@ -411,17 +525,17 @@ function renderDayPage() {
     let transitHtml = '';
     if (idx < dayData.spots.length - 1) {
       const nextSpot = dayData.spots[idx + 1];
-      const transitUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(spot.name)}&destination=${encodeURIComponent(nextSpot.name)}&travelmode=transit`;
+      const transitUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(cleanName)}&destination=${encodeURIComponent(cleanSpotName(nextSpot.name))}&travelmode=transit`;
       transitHtml = `
         <div class="transit-box">
           <a href="${transitUrl}" target="_blank" class="transit-btn">
-            🚌 前往「${nextSpot.name}」交通路線 ➔
+            🚌 前往「${cleanSpotName(nextSpot.name)}」交通路線 ➔
           </a>
         </div>
       `;
     }
 
-    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`;
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanName)}`;
     const photoKey = `photo_${trip.id}_${dayIndex}_${idx}`;
     const savedPhoto = localStorage.getItem(photoKey);
 
@@ -437,65 +551,60 @@ function renderDayPage() {
       photoContent = `<div class="polaroid-img">📷 點擊上傳 / 紀錄旅行拍立得照片</div>`;
     }
 
-    // 格式化停留時間顯示 (預估停留：XX時XX分)
     const formattedDuration = formatDurationLabel(spot.duration);
 
     block.innerHTML = `
       <div class="card">
         <div class="card-top" style="display: flex; justify-content: space-between; align-items: center;">
-          
-          <!-- 左側：行程時間（點擊後開啟下拉選單） -->
           <div id="timeBox_${idx}">
             <span onclick="enableTimeSelect(${tripIndex}, ${dayIndex}, ${idx}, '${spot.time}')" style="cursor: pointer; font-size: 15px; font-weight: 800; color: #d35400; user-select: none;">
               ⏰ ${spot.time}
             </span>
           </div>
 
-          <!-- 右側：停留時間（點擊後開啟下拉選單） + 刪除 + 拖曳按鈕 -->
           <div style="display: flex; align-items: center; gap: 8px;">
             <div id="durationBox_${idx}">
               <span onclick="enableDurationSelect(${tripIndex}, ${dayIndex}, ${idx}, '${spot.duration}')" style="cursor: pointer; font-size: 12px; font-weight: 600; color: #555; background: #ebdcd0; padding: 4px 10px; border-radius: 12px; user-select: none; display: inline-flex; align-items: center; gap: 4px;">
                 ⏱️ 預計停留：${formattedDuration}
               </span>
             </div>
-            <button onclick="deleteSpot(${tripIndex}, ${dayIndex}, ${idx})" style="background:none; border:none; color:#c2593f; cursor:pointer; font-weight:bold; font-size:14px; margin-left: 2px;">✕</button>
-            <span class="drag-handle" style="margin-left:2px; cursor:grab;">☰</span>
+            <button onclick="deleteSpot(${tripIndex}, ${dayIndex}, ${idx})" class="hide-on-export" style="background:none; border:none; color:#c2593f; cursor:pointer; font-weight:bold; font-size:14px; margin-left: 2px;">✕</button>
+            <span class="drag-handle hide-on-export" style="margin-left:2px; cursor:grab;">☰</span>
           </div>
-
         </div>
-        <div class="spot-name" style="margin-top: 10px; font-size: 16px; font-weight: 700;">${spot.name}</div>
 
-        <div class="polaroid-box" onclick="triggerPhotoUpload('${photoKey}', 'input_${idx}')">
+        <div class="spot-name" style="margin-top: 10px; font-size: 16px; font-weight: 700;">${cleanName}</div>
+
+        <div class="polaroid-box hide-on-export" onclick="triggerPhotoUpload('${photoKey}', 'input_${idx}')">
           <div id="preview_${idx}">${photoContent}</div>
-          <div class="polaroid-caption">🖼️ ${spot.name} · 隨手拍</div>
+          <div class="polaroid-caption">🖼️ ${cleanName} · 隨手拍</div>
           <input type="file" id="input_${idx}" class="file-input" accept="image/*" onchange="handlePhotoUpload(event, '${photoKey}', 'preview_${idx}')">
         </div>
 
-        <a href="${mapUrl}" target="_blank" class="map-btn">📍 Google 地圖導航與評價</a>
+        <a href="${mapUrl}" target="_blank" class="map-btn hide-on-export">📍 Google 地圖導航與評價</a>
       </div>
       ${transitHtml}
     `;
     container.appendChild(block);
   });
 
-  // 新增景點按鈕
   let addSpotBtn = document.getElementById('addSpotBtn');
   if (!addSpotBtn) {
     addSpotBtn = document.createElement('button');
     addSpotBtn.id = 'addSpotBtn';
-    addSpotBtn.className = 'action-btn';
-    addSpotBtn.style.cssText = 'width: 100%; margin: 10px 0 16px 0; background: #eef4fb; color: #2b6cb0; border: 1px dashed #90cdf4; padding: 9px; font-size: 13px; font-weight: bold; border-radius: 10px; cursor: pointer;';
+    addSpotBtn.className = 'action-btn hide-on-export';
+    addSpotBtn.style.cssText = 'width: 100%; margin: 8px 0 14px 0; background: #eef4fb; color: #2b6cb0; border: 1px dashed #90cdf4; padding: 6px 10px; font-size: 13px; font-weight: bold; border-radius: 8px; cursor: pointer;';
     addSpotBtn.innerText = '➕ 新增景點 / 行程項目';
     container.after(addSpotBtn);
   }
 
   addSpotBtn.onclick = () => {
-    const spotName = prompt('請輸入景點或行程名稱（例如：東京鐵塔）：');
-    if (!spotName) return;
+    const rawSpotName = prompt('請輸入景點或行程名稱（例如：東京鐵塔）：');
+    if (!rawSpotName) return;
 
     history[tripIndex].days[dayIndex].spots.push({
       time: '10:00',
-      name: spotName,
+      name: cleanSpotName(rawSpotName),
       duration: '02時00分'
     });
 
@@ -527,7 +636,6 @@ function renderDayPage() {
   renderExpenseBlock(history, tripIndex, dayIndex);
 }
 
-// 點擊後切換為 24小時制 行程時間下拉選單
 function enableTimeSelect(tripIndex, dayIndex, spotIndex, currentTime) {
   const box = document.getElementById(`timeBox_${spotIndex}`);
   if (!box) return;
@@ -549,7 +657,6 @@ function enableTimeSelect(tripIndex, dayIndex, spotIndex, currentTime) {
   `;
 }
 
-// 點擊後切換為 停留時間下拉選單 (00時30分 ~ 12時00分)
 function enableDurationSelect(tripIndex, dayIndex, spotIndex, currentDuration) {
   const box = document.getElementById(`durationBox_${spotIndex}`);
   if (!box) return;
@@ -570,7 +677,6 @@ function enableDurationSelect(tripIndex, dayIndex, spotIndex, currentDuration) {
   `;
 }
 
-// 格式化停留時間顯示 (確保如 03時00分)
 function formatDurationLabel(raw) {
   if (!raw) return '02時00分';
   if (raw.includes('時') && raw.includes('分')) return raw;
@@ -586,7 +692,6 @@ function formatDurationLabel(raw) {
   return raw;
 }
 
-// 更新行程時間
 function updateSpotTime(tripIndex, dayIndex, spotIndex, newTime) {
   const history = getSavedTrips();
   history[tripIndex].days[dayIndex].spots[spotIndex].time = newTime;
@@ -594,7 +699,6 @@ function updateSpotTime(tripIndex, dayIndex, spotIndex, newTime) {
   renderDayPage();
 }
 
-// 更新停留時間
 function updateSpotDuration(tripIndex, dayIndex, spotIndex, newDuration) {
   const history = getSavedTrips();
   history[tripIndex].days[dayIndex].spots[spotIndex].duration = newDuration;
@@ -644,7 +748,7 @@ function renderExpenseBlock(history, tripIndex, dayIndex) {
         <span>💸 ${item.item}</span>
         <span>
           <strong>$${item.cost}</strong>
-          <button onclick="deleteExpense(${tripIndex}, ${dayIndex}, ${i})" style="background:none; border:none; color:#c2593f; cursor:pointer; margin-left:8px;">✕</button>
+          <button onclick="deleteExpense(${tripIndex}, ${dayIndex}, ${i})" class="hide-on-export" style="background:none; border:none; color:#c2593f; cursor:pointer; margin-left:8px;">✕</button>
         </span>
       `;
       expenseListEl.appendChild(row);
@@ -707,21 +811,88 @@ function deletePhoto(photoKey, previewId) {
 }
 
 function exportAsLongImage() {
-  const area = document.getElementById('captureArea');
-  if (!area || typeof html2canvas === 'undefined') return;
+  document.body.classList.add('pdf-export-mode');
+  window.print();
+  setTimeout(() => {
+    document.body.classList.remove('pdf-export-mode');
+  }, 1000);
+}
 
-  alert('正在繪製拍立得長圖，請稍等約 1~2 秒...');
+function exportFullTripPdf(trip) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('請允許開啟彈出視窗以下載 PDF！');
+    return;
+  }
 
-  html2canvas(area, {
-    scale: 2,
-    backgroundColor: '#f5eedc',
-    useCORS: true
-  }).then(canvas => {
-    const link = document.createElement('a');
-    link.download = `travel_book_day_${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  }).catch(err => {
-    alert('長圖繪製失敗，請重新再試一次！');
+  const membersText = trip.members && trip.members.length > 0 ? trip.members.join('、') : '無';
+
+  let htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${trip.title} - 完整行程總覽表</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; color: #333; line-height: 1.5; }
+        h1 { text-align: center; color: #2b6cb0; border-bottom: 2px solid #2b6cb0; padding-bottom: 10px; margin-bottom: 5px; }
+        .members-info { text-align: center; font-size: 13px; color: #666; margin-bottom: 20px; }
+        .day-section { margin-bottom: 24px; page-break-inside: avoid; }
+        .day-title { background: #eef4fb; color: #2b6cb0; padding: 8px 12px; font-weight: bold; border-radius: 6px; font-size: 16px; margin-bottom: 10px; }
+        .spot-item { margin-left: 12px; padding: 6px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
+        .spot-time { font-weight: bold; color: #d35400; display: inline-block; width: 60px; }
+        .spot-name { font-weight: bold; }
+        .spot-dur { font-size: 12px; color: #666; margin-left: 10px; }
+        .transit-info { font-size: 12px; color: #888; margin-left: 72px; margin-top: 2px; }
+        .memo-box { background: #fffef0; border-left: 4px solid #f39c12; padding: 8px 12px; margin-top: 8px; margin-left: 12px; font-size: 13px; color: #555; white-space: pre-wrap; }
+      </style>
+    </head>
+    <body>
+      <h1>✈️ ${trip.title} - 行程總覽</h1>
+      <div class="members-info">參與人員：${membersText}</div>
+  `;
+
+  trip.days.forEach((day, index) => {
+    htmlContent += `
+      <div class="day-section">
+        <div class="day-title">${day.name}</div>
+    `;
+
+    if (day.spots.length === 0) {
+      htmlContent += `<div style="margin-left:12px; color:#999; font-size:13px;">尚無安排景點</div>`;
+    } else {
+      day.spots.forEach((spot, sIdx) => {
+        const cleanName = cleanSpotName(spot.name);
+        htmlContent += `
+          <div class="spot-item">
+            <span class="spot-time">⏰ ${spot.time}</span>
+            <span class="spot-name">${cleanName}</span>
+            <span class="spot-dur">(預計停留: ${spot.duration || '2小時'})</span>
+          </div>
+        `;
+        if (sIdx < day.spots.length - 1) {
+          const nextName = cleanSpotName(day.spots[sIdx + 1].name);
+          htmlContent += `<div class="transit-info">🚌 交通移動 ➔ 下個景點：${nextName}</div>`;
+        }
+      });
+    }
+
+    if (day.memo) {
+      htmlContent += `<div class="memo-box"><strong>📌 備忘錄：</strong>\n${day.memo}</div>`;
+    }
+
+    htmlContent += `</div>`;
   });
+
+  htmlContent += `
+      <script>
+        window.onload = function() {
+          window.print();
+        }
+      </script>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
 }
