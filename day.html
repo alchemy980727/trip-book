@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>詳細行程 - 旅遊小書</title>
+  
+  <!-- 引入 Sortable.js (拖拽排序) 與 html2canvas (長圖導出) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
   <style>
     :root {
       --primary: #c2593f;
@@ -13,6 +18,7 @@
       --sub-text: #7c6f66;
       --border-dashed: #d8c8b8;
     }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", sans-serif;
       background-color: var(--bg);
@@ -21,10 +27,8 @@
       margin: 0;
       padding: 24px 16px;
       color: var(--text);
-      overflow-x: hidden;
     }
     
-    /* 翻頁動畫容器 */
     .book-container {
       max-width: 480px;
       margin: 0 auto;
@@ -34,19 +38,6 @@
       box-shadow: 0 10px 30px rgba(70, 50, 40, 0.08), 0 0 0 1px rgba(200, 180, 160, 0.3);
       padding: 28px 20px;
       box-sizing: border-box;
-      animation: pageTurn 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-      transform-origin: left center;
-    }
-
-    @keyframes pageTurn {
-      0% {
-        opacity: 0;
-        transform: rotateY(-18deg) translateX(30px);
-      }
-      100% {
-        opacity: 1;
-        transform: rotateY(0deg) translateX(0);
-      }
     }
 
     .nav-bar {
@@ -64,17 +55,20 @@
       text-decoration: none;
       font-size: 13px;
       font-weight: 700;
-      transition: all 0.2s;
     }
-    .back-btn:hover { background: #f0e6d8; }
+
+    .export-btns {
+      display: flex;
+      gap: 6px;
+    }
 
     .pdf-btn {
       background: #fdf5e6;
       color: var(--primary);
       border: 1px solid #ebd3b0;
-      padding: 8px 14px;
+      padding: 8px 12px;
       border-radius: 12px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
     }
@@ -120,7 +114,21 @@
       background: var(--primary);
       border: 2px solid white;
       box-shadow: 0 0 0 1.5px var(--primary);
+      z-index: 2;
     }
+    
+    /* 拖拽 Handle 風格 */
+    .drag-handle {
+      cursor: grab;
+      font-size: 16px;
+      color: #a89a8e;
+      padding: 2px 6px;
+      user-select: none;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+
     .card {
       background: #faf6f0;
       border: 1px solid var(--border-dashed);
@@ -138,17 +146,16 @@
     .duration { font-size: 11px; font-weight: 600; background: #eae1d5; padding: 3px 8px; border-radius: 6px; color: var(--sub-text); }
     .spot-name { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
     
-    /* 拍立得照片預覽與上傳區 */
+    /* 拍立得相框樣式 */
     .polaroid-box {
       margin: 12px 0;
       background: #ffffff;
-      padding: 8px 8px 24px 8px;
+      padding: 8px 8px 20px 8px;
       border: 1px solid #e0d5c8;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
       border-radius: 4px;
       text-align: center;
       cursor: pointer;
-      position: relative;
     }
     .polaroid-img {
       width: 100%;
@@ -181,10 +188,7 @@
       margin-top: 6px;
     }
 
-    .transit-box {
-      margin: 10px 0 20px 0;
-      padding-left: 2px;
-    }
+    .transit-box { margin: 10px 0 20px 0; }
     .transit-btn {
       display: inline-flex;
       align-items: center;
@@ -197,31 +201,85 @@
       font-size: 12px;
       font-weight: 700;
       text-decoration: none;
-      transition: background 0.2s;
     }
-    .transit-btn:hover { background: #fdf5e6; }
 
-    /* 列印 PDF 風格 */
-    .print-only { display: none; }
+    /* 便條紙與記帳區塊 */
+    .extra-section {
+      margin-top: 32px;
+      border-top: 2px dashed var(--border-dashed);
+      padding-top: 20px;
+    }
+    .memo-card {
+      background: #fef9e7;
+      border: 1px solid #f3e5ab;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 2px 4px 12px rgba(0,0,0,0.04);
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .memo-textarea {
+      width: 100%;
+      height: 80px;
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text);
+      resize: vertical;
+      outline: none;
+    }
+
+    .expense-card {
+      background: #f3f8f2;
+      border: 1px solid #d2e5d0;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    /* Sortable 拖拽時的 Ghost 樣式 */
+    .sortable-ghost {
+      opacity: 0.4;
+      background: #e2d5c3 !important;
+    }
+
+    /* 📸 PDF 列印專用質感樣式 */
     @media print {
-      body { background: white !important; padding: 0 !important; }
-      .book-container { box-shadow: none !important; max-width: 100% !important; padding: 0 !important; animation: none !important; }
-      .nav-bar, .timeline { display: none !important; }
-      .print-only { display: block !important; padding: 20px; }
-      .pdf-title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-      .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-      .pdf-table th, .pdf-table td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 14px; }
-      .pdf-table th { background-color: #f2f2f2; font-weight: bold; }
-      .pdf-transit-note { font-size: 12px; color: #555; background: #f9f9f9; padding: 8px 12px; border-left: 4px solid var(--primary); margin-top: 10px; }
+      body {
+        background: white !important;
+        padding: 0 !important;
+      }
+      .book-container {
+        box-shadow: none !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+      }
+      .nav-bar, .drag-handle, .file-input {
+        display: none !important;
+      }
+      .card {
+        page-break-inside: avoid;
+      }
     }
   </style>
 </head>
 <body>
 
-<div class="book-container">
+<div class="book-container" id="captureArea">
   <div class="nav-bar">
     <a href="view.html" class="back-btn">⬅️ 返總覽</a>
-    <button onclick="window.print()" class="pdf-btn">📄 匯出 PDF</button>
+    <div class="export-btns">
+      <button onclick="exportAsLongImage()" class="pdf-btn">🖼️ 導出拍立得長圖</button>
+      <button onclick="window.print()" class="pdf-btn">📄 匯出 PDF</button>
+    </div>
   </div>
 
   <div class="header">
@@ -230,20 +288,22 @@
 
   <div id="dayScheduleContent" class="timeline"></div>
 
-  <div class="print-only">
-    <h2 class="pdf-title" id="pdfHeaderTitle">簡易日程表</h2>
-    <table class="pdf-table">
-      <thead>
-        <tr>
-          <th style="width: 20%;">時間</th>
-          <th style="width: 55%;">景點名稱</th>
-          <th style="width: 25%;">停留時間</th>
-        </tr>
-      </thead>
-      <tbody id="pdfTableBody"></tbody>
-    </table>
-    <div class="pdf-transit-note">
-      💡 <strong>建議交通方式：</strong>景點間建議搭配公車、捷運等大眾運輸，或使用計程車/步行接駁。
+  <!-- 額外實用工具區：備忘錄與花費記帳 -->
+  <div class="extra-section">
+    <div class="memo-card">
+      <div class="section-title">📝 今日備忘錄 / 隨手記</div>
+      <textarea id="dayMemoInput" class="memo-textarea" placeholder="點擊這裡寫下注意事項（如：飯店 Wi-Fi、Pass 編號、必買物品...）"></textarea>
+    </div>
+
+    <div class="expense-card">
+      <div class="section-title">
+        <span>💰 今日記帳小工具</span>
+        <button id="addExpenseBtn" style="background:var(--primary); color:white; border:none; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer;">+ 新增花費</button>
+      </div>
+      <div id="expenseList" style="margin-top:10px;"></div>
+      <div style="text-align:right; margin-top:10px; font-size:13px; font-weight:800; border-top:1px dashed #c0d8bd; padding-top:8px;">
+        當日總計：<span id="totalCost" style="color:var(--primary);">$0</span>
+      </div>
     </div>
   </div>
 </div>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊隨身小書</title>
+  <title>我的旅遊小書 - 行程列表</title>
   <style>
     :root {
       --primary: #c2593f;
@@ -31,141 +31,106 @@
       box-shadow: 0 10px 30px rgba(70, 50, 40, 0.08), 0 0 0 1px rgba(200, 180, 160, 0.3);
       padding: 28px 20px;
       box-sizing: border-box;
-      position: relative;
     }
     .header {
       text-align: center;
-      padding-bottom: 16px;
+      padding-bottom: 18px;
       margin-bottom: 24px;
       border-bottom: 2px dashed var(--border-dashed);
-      position: relative;
-    }
-    .stamp {
-      position: absolute;
-      top: -10px;
-      right: 0;
-      border: 2px dashed var(--primary);
-      color: var(--primary);
-      padding: 4px 8px;
-      font-size: 11px;
-      font-weight: 800;
-      transform: rotate(12deg);
-      border-radius: 4px;
-      opacity: 0.8;
     }
     .title {
       font-size: 24px;
       font-weight: 800;
-      margin: 0 0 6px 0;
+      margin: 0;
       color: var(--primary);
-      letter-spacing: -0.5px;
     }
     .subtitle {
       font-size: 13px;
       color: var(--sub-text);
-      margin: 0;
+      margin-top: 6px;
     }
-    .input-section {
-      margin-bottom: 28px;
-    }
-    textarea {
-      width: 100%;
-      height: 160px;
-      padding: 14px;
-      border: 1.5px solid var(--border-dashed);
-      border-radius: 14px;
+    .trip-card {
       background: #faf6f0;
-      font-size: 13px;
-      line-height: 1.5;
-      color: var(--text);
-      box-sizing: border-box;
-      resize: vertical;
-      font-family: inherit;
-      transition: border-color 0.2s, background 0.2s;
+      border: 1px solid var(--border-dashed);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
     }
-    textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-      background: #ffffff;
-    }
-    .parse-btn {
-      width: 100%;
+    .action-btn {
+      display: inline-block;
       background: var(--primary);
       color: white;
       border: none;
-      padding: 14px;
-      border-radius: 14px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-      margin-top: 12px;
-      box-shadow: 0 4px 12px rgba(194, 89, 63, 0.25);
-      transition: background 0.2s, transform 0.1s;
-    }
-    .parse-btn:active { transform: scale(0.98); }
-    .section-title {
-      font-size: 15px;
-      font-weight: 800;
-      margin-bottom: 14px;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .saved-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .saved-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #faf6f0;
-      border: 1px solid var(--border-dashed);
-      padding: 14px 16px;
+      padding: 10px 16px;
       border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .saved-item:hover {
-      background: #ffffff;
-      border-color: var(--primary);
-      transform: translateY(-1px);
-    }
-    .saved-title {
-      font-size: 14px;
       font-weight: 700;
-      color: var(--text);
-    }
-    .delete-btn {
-      background: transparent;
-      color: #9e8e82;
-      border: none;
-      padding: 4px 8px;
-      font-size: 12px;
+      font-size: 13px;
       cursor: pointer;
-      border-radius: 6px;
     }
-    .delete-btn:hover { color: #d32f2f; }
+    .add-btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .add-btn {
+      flex: 1;
+      background: #fdf5e6;
+      color: var(--primary);
+      border: 2px dashed #ebd3b0;
+      padding: 12px;
+      border-radius: 16px;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* 彈窗樣式 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      width: 85%;
+      max-width: 400px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
   </style>
 </head>
 <body>
 
 <div class="book-container">
   <div class="header">
-    <div class="stamp">TRIP BOOK</div>
-    <h1 class="title">📖 旅遊隨身小書</h1>
-    <p class="subtitle">貼上行程文字，自動生成專屬隨身手冊</p>
+    <h1 class="title">📖 我的旅遊小書</h1>
+    <div class="subtitle">隨身口袋行程 · 隨時紀錄旅行點滴</div>
   </div>
 
-  <div class="input-section">
-    <textarea id="bulkInput" placeholder="請在此貼上行程文字，例如：&#10;行程名稱：東京快閃行&#10;第一天&#10;09:00 成田機場 (停留 1小時)&#10;11:00 淺草寺 (停留 2小時)"></textarea>
-    <button id="parseBtn" class="parse-btn">✨ 開啟新旅程</button>
+  <div class="add-btn-group">
+    <button id="addTripBtn" class="add-btn">➕ 手動建立行程</button>
+    <button id="parseTripBtn" class="add-btn" style="background:#f3f8f2; color:#2e7d32; border-color:#c0d8bd;">✨ 文字解析新行程</button>
   </div>
 
-  <div class="section-title">📂 我的歷史行程</div>
-  <div id="savedTripsList" class="saved-list"></div>
+  <div id="tripList"></div>
+</div>
+
+<!-- 🌟 智能行程文字解析 Modal 彈窗 -->
+<div id="parseModal" class="modal-overlay">
+  <div class="modal-content">
+    <h3 style="margin-top:0; color:var(--primary);">✨ 貼上行程文字自動解析</h3>
+    <p style="font-size:12px; color:var(--sub-text);">格式範例：<br>Day 1: 大阪城 → 心齋橋<br>Day 2: 環球影城</p>
+    <textarea id="parseInput" rows="8" placeholder="第一行為行程標題（例如：東京 5 日自由行）&#10;Day 1: 抵達東京&#10;12:00 成田機場 → 14:30 飯店 Check-in (1小時) → 16:00 淺草寺 (2小時)" style="width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 13px;"></textarea>
+    <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
+      <button id="closeModalBtn" style="background:#eee; border:none; padding:8px 14px; border-radius:8px; cursor:pointer;">取消</button>
+      <button id="submitParseBtn" style="background:var(--primary); color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">開始建立</button>
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>
