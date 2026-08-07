@@ -1,298 +1,352 @@
+// 全局資料儲存 Key
+const STORAGE_KEY = 'TRIP_BOOK_DATA';
+
+// 判斷當前頁面
 document.addEventListener('DOMContentLoaded', () => {
-
-  function getStoredBooks() {
-    try {
-      return JSON.parse(localStorage.getItem('all_chitrip_books')) || [];
-    } catch (e) {
-      return [];
-    }
+  const path = window.location.pathname;
+  if (path.endsWith('index.html') || path.endsWith('/') || path === '') {
+    initIndexPage();
+  } else if (path.endsWith('view.html')) {
+    renderViewPage();
+  } else if (path.endsWith('day.html')) {
+    renderDayPage();
   }
-
-  function encodeTripData(data) {
-    const jsonStr = JSON.stringify(data);
-    return btoa(encodeURIComponent(jsonStr));
-  }
-
-  function decodeTripData(encodedStr) {
-    const jsonStr = decodeURIComponent(atob(encodedStr));
-    return JSON.parse(jsonStr);
-  }
-
-  // ==========================================
-  // 1. 首頁 index.html 邏輯
-  // ==========================================
-  const bulkInput = document.getElementById('bulkInput');
-  const parseBtn = document.getElementById('parseBtn');
-  const savedTripsList = document.getElementById('savedTripsList');
-
-  function renderSavedList() {
-    if (!savedTripsList) return;
-
-    const books = getStoredBooks();
-    savedTripsList.innerHTML = '';
-
-    if (books.length === 0) {
-      savedTripsList.innerHTML = '<p style="text-align:center; color:#8e8e93; font-size:13px; margin: 20px 0;">目前沒有儲存的行程。</p>';
-      return;
-    }
-
-    books.forEach((book, index) => {
-      const item = document.createElement('div');
-      item.className = 'saved-item';
-      item.innerHTML = `
-        <div class="saved-title">✈️ ${book.title}</div>
-        <button class="delete-btn">刪除</button>
-      `;
-
-      item.querySelector('.saved-title').addEventListener('click', () => {
-        localStorage.setItem('current_chitrip_book', JSON.stringify(book));
-        window.location.href = 'view.html';
-      });
-
-      item.querySelector('.delete-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm(`確定刪除「${book.title}」？`)) {
-          const currentBooks = getStoredBooks();
-          currentBooks.splice(index, 1);
-          localStorage.setItem('all_chitrip_books', JSON.stringify(currentBooks));
-          renderSavedList();
-        }
-      });
-
-      savedTripsList.appendChild(item);
-    });
-  }
-
-  if (bulkInput && parseBtn) {
-    renderSavedList();
-
-    parseBtn.addEventListener('click', () => {
-      try {
-        const rawText = bulkInput.value.trim();
-        if (!rawText) {
-          alert('請先貼上行程文字！');
-          return;
-        }
-
-        const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-        if (lines.length === 0) return;
-
-        let tripTitle = lines[0].replace('行程名稱：', '').trim();
-        const itinerary = [];
-        let currentDay = "第一天";
-
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.startsWith('第') || line.toLowerCase().startsWith('day')) {
-            currentDay = line;
-          } else {
-            const timeMatch = line.match(/^(\d{1,2}:\d{2})\s*(.*)/);
-            if (timeMatch) {
-              const time = timeMatch[1];
-              let restStr = timeMatch[2];
-              let duration = "";
-              const durationMatch = restStr.match(/\(停留\s*([^)]+)\)/);
-              if (durationMatch) {
-                duration = durationMatch[1];
-                restStr = restStr.replace(/\(停留\s*[^)]+\)/, '').trim();
-              }
-              const spotName = restStr || "景點";
-              const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
-
-              itinerary.push({
-                day: currentDay,
-                time: time,
-                spotName: spotName,
-                duration: duration,
-                mapUrl: mapUrl
-              });
-            }
-          }
-        }
-
-        const newBookData = {
-          id: Date.now(),
-          title: tripTitle,
-          items: itinerary
-        };
-
-        const allBooks = getStoredBooks();
-        allBooks.unshift(newBookData);
-        localStorage.setItem('all_chitrip_books', JSON.stringify(allBooks));
-        localStorage.setItem('current_chitrip_book', JSON.stringify(newBookData));
-
-        window.location.href = 'view.html';
-      } catch (error) {
-        alert('解析發生錯誤：' + error.message);
-      }
-    });
-  }
-
-  // ==========================================
-  // 2. 總覽頁 view.html 邏輯
-  // ==========================================
-  const bookTitle = document.getElementById('bookTitle');
-  const timelineList = document.getElementById('timelineList');
-  const shareTripBtn = document.getElementById('shareTripBtn');
-
-  if (bookTitle && timelineList) {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const sharedDataParam = urlParams.get('data');
-
-      if (sharedDataParam) {
-        try {
-          const importedBook = decodeTripData(sharedDataParam);
-          const allBooks = getStoredBooks();
-          const exists = allBooks.some(b => b.id === importedBook.id);
-          if (!exists) {
-            allBooks.unshift(importedBook);
-            localStorage.setItem('all_chitrip_books', JSON.stringify(allBooks));
-          }
-          localStorage.setItem('current_chitrip_book', JSON.stringify(importedBook));
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (e) {
-          console.error("解析分享連結失敗", e);
-        }
-      }
-
-      const rawData = localStorage.getItem('current_chitrip_book');
-      if (!rawData) {
-        bookTitle.innerText = "尚未選擇行程";
-        timelineList.innerHTML = '<p style="text-align:center; color:#888;">請回首頁選擇行程。</p>';
-      } else {
-        const savedData = JSON.parse(rawData);
-        bookTitle.innerText = savedData.title || "我的旅遊小書";
-
-        if (shareTripBtn) {
-          shareTripBtn.addEventListener('click', () => {
-            const encoded = encodeTripData(savedData);
-            const shareUrl = `${window.location.origin}${window.location.pathname}?data=${encoded}`;
-
-            if (navigator.clipboard) {
-              navigator.clipboard.writeText(shareUrl).then(() => {
-                alert('✨ 行程分享連結已複製！可以傳給朋友囉！');
-              }).catch(() => {
-                prompt('請複製以下行程連結：', shareUrl);
-              });
-            } else {
-              prompt('請複製以下行程連結：', shareUrl);
-            }
-          });
-        }
-
-        const days = [...new Set(savedData.items.map(item => item.day))];
-        timelineList.innerHTML = '';
-
-        days.forEach((dayName, index) => {
-          const dayItems = savedData.items.filter(item => item.day === dayName);
-          const spotCount = dayItems.length;
-          const previewSpots = dayItems.slice(0, 2).map(i => i.spotName).join(' ➔ ');
-
-          const card = document.createElement('div');
-          card.className = 'flow-card';
-          card.innerHTML = `
-            <div class="flow-node-num">${index + 1}</div>
-            <div class="card-title">
-              <span>${dayName}</span>
-              <span style="color:#007aff; font-size:13px; font-weight:bold;">查看 ➔</span>
-            </div>
-            <div class="card-preview">
-              ${previewSpots ? `📍 ${previewSpots}${spotCount > 2 ? ' ...' : ''}` : '尚無景點'}
-            </div>
-            <span class="badge">📌 共 ${spotCount} 個地點</span>
-          `;
-
-          card.addEventListener('click', () => {
-            window.location.href = `day.html?day=${encodeURIComponent(dayName)}`;
-          });
-
-          timelineList.appendChild(card);
-        });
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  // ==========================================
-  // 3. 詳細頁 day.html 邏輯（支援渲染 PDF 表格）
-  // ==========================================
-  const dayPageTitle = document.getElementById('dayPageTitle');
-  const dayScheduleContent = document.getElementById('dayScheduleContent');
-  const pdfHeaderTitle = document.getElementById('pdfHeaderTitle');
-  const pdfTableBody = document.getElementById('pdfTableBody');
-
-  if (dayPageTitle && dayScheduleContent) {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const selectedDay = urlParams.get('day');
-      const rawData = localStorage.getItem('current_chitrip_book');
-
-      if (!rawData || !selectedDay) {
-        dayPageTitle.innerText = "找不到行程";
-      } else {
-        const savedData = JSON.parse(rawData);
-        dayPageTitle.innerText = selectedDay;
-
-        if (pdfHeaderTitle) {
-          pdfHeaderTitle.innerText = `${savedData.title || '旅遊小書'} - ${selectedDay} 日程表`;
-        }
-
-        const filteredItems = savedData.items.filter(item => item.day === selectedDay);
-        
-        // 渲染網頁畫面時間線
-        dayScheduleContent.innerHTML = '';
-        // 清空 PDF 表格
-        if (pdfTableBody) pdfTableBody.innerHTML = '';
-
-        filteredItems.forEach((item, index) => {
-          // 1. 產生網頁卡片
-          const block = document.createElement('div');
-          block.className = 'spot-block';
-          block.innerHTML = `
-            <div class="card">
-              <div class="card-top">
-                <span class="time">⏰ ${item.time}</span>
-                ${item.duration ? `<span class="duration">停留 ${item.duration}</span>` : ''}
-              </div>
-              <div class="spot-name">${item.spotName}</div>
-              <div>
-                <a href="${item.mapUrl}" target="_blank" class="map-btn">📍 Google 地圖定位</a>
-              </div>
-            </div>
-          `;
-          dayScheduleContent.appendChild(block);
-
-          if (index < filteredItems.length - 1) {
-            const nextItem = filteredItems[index + 1];
-            const dirUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(item.spotName)}&destination=${encodeURIComponent(nextItem.spotName)}&travelmode=transit`;
-
-            const transitBox = document.createElement('div');
-            transitBox.className = 'transit-box';
-            transitBox.innerHTML = `
-              <a href="${dirUrl}" target="_blank" class="transit-btn">
-                🚌 前往「${nextItem.spotName}」交通建議 ➔
-              </a>
-            `;
-            dayScheduleContent.appendChild(transitBox);
-          }
-
-          // 2. 產生 PDF 表格列
-          if (pdfTableBody) {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td>${item.time}</td>
-              <td><strong>${item.spotName}</strong></td>
-              <td>${item.duration || '-'}</td>
-            `;
-            pdfTableBody.appendChild(tr);
-          }
-        });
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
 });
+
+// --- 1. 首頁 (index.html) ---
+function initIndexPage() {
+  const parseBtn = document.getElementById('parseBtn');
+  const bulkInput = document.getElementById('bulkInput');
+
+  if (parseBtn) {
+    parseBtn.addEventListener('click', () => {
+      const text = bulkInput.value.trim();
+      if (!text) {
+        alert('請先貼上行程文字！');
+        return;
+      }
+      const tripData = parseTripText(text);
+      saveTripData(tripData);
+      window.location.href = `view.html?id=${tripData.id}`;
+    });
+  }
+
+  renderSavedTrips();
+}
+
+// 行程文字解析器
+function parseTripText(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  let title = "我的隨身旅遊小書";
+  let days = [];
+  let currentDay = null;
+
+  lines.forEach(line => {
+    if (line.startsWith("行程名稱：") || line.startsWith("行程：")) {
+      title = line.replace(/行程名稱：|行程：/, '').trim();
+    } else if (/^第[一二三四五六七八九十0-9]+天/.test(line) || /^Day\s*\d+/i.test(line)) {
+      if (currentDay) days.push(currentDay);
+      currentDay = { name: line, spots: [] };
+    } else if (currentDay) {
+      const spotMatch = line.match(/^(\d{1,2}:\d{2})\s*(.+?)(?:\s*\(停留\s*(.+?)\))?$/);
+      if (spotMatch) {
+        currentDay.spots.push({
+          time: spotMatch[1],
+          name: spotMatch[2],
+          duration: spotMatch[3] || "1小時"
+        });
+      } else {
+        currentDay.spots.push({
+          time: "彈性",
+          name: line,
+          duration: "1小時"
+        });
+      }
+    }
+  });
+
+  if (currentDay) days.push(currentDay);
+
+  if (days.length === 0) {
+    days = [{
+      name: "第一天",
+      spots: [{ time: "09:00", name: text.slice(0, 15) + "...", duration: "全天" }]
+    }];
+  }
+
+  return {
+    id: 'trip_' + Date.now(),
+    title: title,
+    days: days
+  };
+}
+
+// 儲存與讀取 LocalStorage
+function saveTripData(tripData) {
+  const history = getSavedTrips();
+  history.unshift(tripData);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+}
+
+function getSavedTrips() {
+  const data = localStorage.getItem(STORAGE_KEY);
+  return data ? JSON.parse(data) : [];
+}
+
+function renderSavedTrips() {
+  const container = document.getElementById('savedTripsList');
+  if (!container) return;
+  const history = getSavedTrips();
+
+  if (history.length === 0) {
+    container.innerHTML = '<p style="color:var(--sub-text); font-size:13px; text-align:center;">尚無歷史行程，請上方貼上建立！</p>';
+    return;
+  }
+
+  container.innerHTML = history.map(trip => `
+    <div class="saved-item" onclick="window.location.href='view.html?id=${trip.id}'">
+      <span class="saved-title">📖 ${trip.title} (${trip.days.length} 天)</span>
+      <button class="delete-btn" onclick="event.stopPropagation(); deleteTrip('${trip.id}')">刪除</button>
+    </div>
+  `).join('');
+}
+
+function deleteTrip(id) {
+  let history = getSavedTrips();
+  history = history.filter(t => t.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  renderSavedTrips();
+}
+
+
+// --- 2. 總覽頁 (view.html) ---
+function renderViewPage() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const tripId = urlParams.get('id');
+  const history = getSavedTrips();
+  const trip = history.find(t => t.id === tripId) || history[0];
+
+  if (!trip) {
+    alert('找不到行程資料！');
+    window.location.href = 'index.html';
+    return;
+  }
+
+  document.getElementById('bookTitle').innerText = trip.title;
+  const container = document.getElementById('timelineList');
+  
+  // 保留導線與小飛機載具
+  const lineHtml = '<div class="flow-line"></div><div id="vehicleRunner" class="vehicle-runner">✈️</div>';
+  container.innerHTML = lineHtml;
+
+  trip.days.forEach((day, index) => {
+    const card = document.createElement('div');
+    card.className = 'flow-card';
+    
+    const spotNames = day.spots.map(s => s.name).join(' → ');
+    
+    card.innerHTML = `
+      <div class="flow-node-num" id="node_${index}">${index + 1}</div>
+      <div class="card-title">
+        <span>${day.name}</span>
+        <span style="font-size:12px; color:var(--primary)">查看細節 ➔</span>
+      </div>
+      <div class="card-preview">${spotNames}</div>
+      <div class="badge">📍 ${day.spots.length} 個景點/行程</div>
+    `;
+
+    // 點擊事件：記憶最後瀏覽的天數索引，並順暢跳轉
+    card.onclick = () => {
+      sessionStorage.setItem('lastVisitedDayIndex', index);
+      moveVehicleToNode(index);
+      setTimeout(() => {
+        window.location.href = `day.html?id=${trip.id}&day=${index}`;
+      }, 350);
+    };
+
+    container.appendChild(card);
+  });
+
+  // 卡片依序登場
+  const cards = container.querySelectorAll('.flow-card');
+  cards.forEach((card, i) => {
+    setTimeout(() => {
+      card.classList.add('appear');
+    }, i * 120);
+  });
+
+  // 讀取最後存取的紀錄，若無紀錄則預設為第 1 天 (Index 0)
+  const savedIndex = sessionStorage.getItem('lastVisitedDayIndex');
+  const targetIndex = (savedIndex !== null && savedIndex < trip.days.length) ? parseInt(savedIndex, 10) : 0;
+
+  setTimeout(() => {
+    moveVehicleToNode(targetIndex);
+  }, 100);
+
+  // 分享功能
+  const shareBtn = document.getElementById('shareTripBtn');
+  if (shareBtn) {
+    shareBtn.onclick = () => {
+      navigator.clipboard.writeText(window.location.href);
+      alert('已複製行程連結，快分享給朋友吧！');
+    };
+  }
+}
+
+// 切換小飛機位置與波紋擴散 focus
+function moveVehicleToNode(nodeIndex) {
+  const vehicle = document.getElementById('vehicleRunner');
+  const targetNode = document.getElementById(`node_${nodeIndex}`);
+  
+  if (!vehicle || !targetNode) return;
+
+  // 移動小飛機到目標卡片節點左側
+  const card = targetNode.closest('.flow-card');
+  if (card) {
+    vehicle.style.top = `${card.offsetTop + 14}px`;
+  }
+
+  // 移除所有節點的波紋效果
+  document.querySelectorAll('.flow-node-num').forEach(node => {
+    node.classList.remove('active-node');
+  });
+
+  // 給當前停留的節點加上波紋效果 (頻率 2 秒一次)
+  targetNode.classList.add('active-node');
+}
+
+// 切換小飛機位置與波紋擴散 focus
+function moveVehicleToNode(nodeIndex) {
+  const vehicle = document.getElementById('vehicleRunner');
+  const targetNode = document.getElementById(`node_${nodeIndex}`);
+  
+  if (!vehicle || !targetNode) return;
+
+  // 移動小飛機到目標卡片節點
+  const card = targetNode.closest('.flow-card');
+  if (card) {
+    vehicle.style.top = `${card.offsetTop + 14}px`;
+  }
+
+  // 移除所有節點的波紋效果
+  document.querySelectorAll('.flow-node-num').forEach(node => {
+    node.classList.remove('active-node');
+  });
+
+  // 僅給小飛機當前停留的節點加上波紋效果 (頻率 2 秒一次)
+  targetNode.classList.add('active-node');
+}
+
+
+// --- 3. 詳細頁 (day.html) ---
+function renderDayPage() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const tripId = urlParams.get('id');
+  const dayIndex = parseInt(urlParams.get('day') || '0', 10);
+
+  const history = getSavedTrips();
+  const trip = history.find(t => t.id === tripId) || history[0];
+
+  if (!trip || !trip.days[dayIndex]) {
+    alert('找不到指定天數資料！');
+    window.location.href = 'index.html';
+    return;
+  }
+
+  const dayData = trip.days[dayIndex];
+  document.getElementById('dayPageTitle').innerText = `${trip.title} - ${dayData.name}`;
+  document.getElementById('pdfHeaderTitle').innerText = `${trip.title} - ${dayData.name} 詳細行程單`;
+
+  const container = document.getElementById('dayScheduleContent');
+  const pdfTableBody = document.getElementById('pdfTableBody');
+  
+  container.innerHTML = '';
+  if (pdfTableBody) pdfTableBody.innerHTML = '';
+
+  dayData.spots.forEach((spot, idx) => {
+    const block = document.createElement('div');
+    block.className = 'spot-block';
+    
+    // 交通導航按鈕
+    let transitHtml = '';
+    if (idx < dayData.spots.length - 1) {
+      const nextSpot = dayData.spots[idx + 1];
+      const transitUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(spot.name)}&destination=${encodeURIComponent(nextSpot.name)}&travelmode=transit`;
+      transitHtml = `
+        <div class="transit-box">
+          <a href="${transitUrl}" target="_blank" class="transit-btn">
+            🚌 前往「${nextSpot.name}」交通路線 ➔
+          </a>
+        </div>
+      `;
+    }
+
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`;
+    const photoKey = `photo_${trip.id}_${dayIndex}_${idx}`;
+    const savedPhoto = localStorage.getItem(photoKey);
+
+    // 拍立得照片 HTML 結構
+    const photoContent = savedPhoto 
+      ? `<img src="${savedPhoto}" class="polaroid-img" style="object-fit:cover;">`
+      : `<div class="polaroid-img">📷 點擊上傳 / 紀錄旅行拍立得照片</div>`;
+
+    block.innerHTML = `
+      <div class="card">
+        <div class="card-top">
+          <span class="time">⏰ ${spot.time}</span>
+          <span class="duration">⏱️ 預計停留: ${spot.duration}</span>
+        </div>
+        <div class="spot-name">${spot.name}</div>
+
+        <!-- 拍立得相片區域 -->
+        <div class="polaroid-box" onclick="triggerPhotoUpload('${photoKey}', 'input_${idx}')">
+          <div id="preview_${idx}">${photoContent}</div>
+          <div class="polaroid-caption">🖼️ ${spot.name} · 隨手拍</div>
+          <input type="file" id="input_${idx}" class="file-input" accept="image/*" onchange="handlePhotoUpload(event, '${photoKey}', 'preview_${idx}')">
+        </div>
+
+        <a href="${mapUrl}" target="_blank" class="map-btn">📍 Google 地圖導航與評價</a>
+      </div>
+      ${transitHtml}
+    `;
+    container.appendChild(block);
+
+    // PDF 列印表格渲染
+    if (pdfTableBody) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${spot.time}</td>
+        <td><strong>${spot.name}</strong></td>
+        <td>${spot.duration}</td>
+      `;
+      pdfTableBody.appendChild(tr);
+    }
+  });
+}
+
+// 觸發照片選擇
+function triggerPhotoUpload(photoKey, inputId) {
+  const input = document.getElementById(inputId);
+  if (input) input.click();
+}
+
+// 處理相片上傳與 LocalStorage 存取
+function handlePhotoUpload(event, photoKey, previewId) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64Img = e.target.result;
+    try {
+      localStorage.setItem(photoKey, base64Img);
+      const previewEl = document.getElementById(previewId);
+      if (previewEl) {
+        previewEl.innerHTML = `<img src="${base64Img}" class="polaroid-img" style="object-fit:cover;">`;
+      }
+    } catch (err) {
+      alert('照片檔案較大，建議選擇較小張照片上傳喔！');
+    }
+  };
+  reader.readAsDataURL(file);
+}
