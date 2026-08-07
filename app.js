@@ -30,7 +30,10 @@ function normalizeSpot(spot = {}) {
   return {
     time: /^\d{1,2}:\d{2}$/.test(String(spot.time || '')) ? formatTime(String(spot.time)) : '09:00',
     name: cleanSpotName(String(spot.name || '').trim()),
-    duration: formatDurationLabel(String(spot.duration || '02時00分'))
+    duration: formatDurationLabel(String(spot.duration || '02時00分')),
+    lat: Number.isFinite(Number(spot.lat)) ? Number(spot.lat) : null,
+    lng: Number.isFinite(Number(spot.lng)) ? Number(spot.lng) : null,
+    address: String(spot.address || '').trim()
   };
 }
 
@@ -385,10 +388,36 @@ function renderIndexPage() {
 function cleanSpotName(rawName) {
   if (!rawName) return '';
   return rawName
-    .replace(/(\(|\（|\s|^)(\d+(?:\.\d+)?)\s*(小時|hr|hrs|min|分鐘|分)(\)|\）|\s|$)/gi, ' ')
-    .replace(/停留\s*\d+.*$/gi, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/（[^）]*）/g, ' ')
+    .replace(/停留\s*\d+(?:\.\d+)?\s*(?:小時|小时|時|hr|hrs|hour|hours|分鐘|分钟|分|min|mins)?/gi, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/^[-:\s()（）]+|[-:\s()（）]+$/g, '')
     .trim();
+}
+
+// Parse an explicitly supplied stay duration. This always has priority over
+// calculating duration from the next itinerary item's start time.
+function parseExplicitDuration(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+
+  // Chinese format: 03時00分 / 3小時 / 30分鐘 / 1小時30分鐘
+  let m = text.match(/(?:停留\s*)?(?:(\d+(?:\.\d+)?)\s*(?:時|小時|小时|hr|hrs|hour|hours))?\s*(?:(\d+(?:\.\d+)?)\s*(?:分|分鐘|分钟|min|mins))?/i);
+  if (m && (m[1] !== undefined || m[2] !== undefined)) {
+    const hours = m[1] ? parseFloat(m[1]) : 0;
+    const mins = m[2] ? parseFloat(m[2]) : 0;
+    return minutesToDuration(hours * 60 + mins);
+  }
+
+  // Plain number + unit, e.g. 90分鐘 / 1.5小時
+  m = text.match(/(?:停留\s*)?(\d+(?:\.\d+)?)\s*(分鐘|分钟|分|min|mins|小時|小时|時|hr|hrs|hour|hours)/i);
+  if (m) {
+    const n = parseFloat(m[1]);
+    const unit = m[2].toLowerCase();
+    return minutesToDuration(unit.includes('min') || unit.includes('分') ? n : n * 60);
+  }
+  return null;
 }
 
 function parseTextToTrip(text) {
@@ -420,10 +449,17 @@ function parseTextToTrip(text) {
       let spotTime = '09:00';
       let duration = '02時00分';
       let spotName = spotStr;
+
+      // IMPORTANT: an explicit '(停留 03時00分)' must win over any
+      // duration inferred from a time range or from the next itinerary item.
+      const explicitMatch = spotStr.match(/(?:\(|\（)\s*停留\s*([^()（）]+?)\s*(?:\)|\）)/i)
+        || spotStr.match(/停留\s*([^()（）]+?)(?=\s*$|\s*\(|\s*（)/i);
+      const explicitDuration = explicitMatch ? parseExplicitDuration(explicitMatch[1]) : null;
+
       const range = spotStr.match(/(\d{1,2}:\d{2})\s*(?:[-~～至到])\s*(\d{1,2}:\d{2})/);
       if (range) {
         spotTime = formatTime(range[1]);
-        let startMin = timeToMinutes(range[1]);
+        const startMin = timeToMinutes(range[1]);
         let endMin = timeToMinutes(range[2]);
         if (endMin <= startMin) endMin += 24 * 60;
         duration = minutesToDuration(Math.min(24 * 60 - startMin, endMin - startMin));
@@ -433,13 +469,10 @@ function parseTextToTrip(text) {
         if (timeMatch) { spotTime = formatTime(timeMatch[1]); spotName = spotName.replace(timeMatch[1], ''); }
         else spotTime = `${String(Math.min(23, 9 + day.spots.length * 2)).padStart(2, '0')}:00`;
       }
-      const durationMatch = spotName.match(/(?:\(|\（|\s|^)\s*(\d+(?:\.\d+)?)\s*(小時|小时|hr|hrs|hour|hours|min|mins|分鐘|分钟|分)(?:\)|\）|\s|$)/i) || spotName.match(/停留\s*(\d+(?:\.\d+)?)\s*(小時|小时|hr|hrs|hour|hours|min|mins|分鐘|分钟|分)/i);
-      if (durationMatch) {
-        const num = parseFloat(durationMatch[1]);
-        const unit = durationMatch[2].toLowerCase();
-        duration = minutesToDuration(unit.includes('min') || unit.includes('分') ? num : num * 60);
-        spotName = spotName.replace(durationMatch[0], '');
-      }
+
+      // Explicit duration is authoritative. Never derive it from the next spot.
+      if (explicitDuration) duration = explicitDuration;
+
       spotName = cleanSpotName(spotName);
       if (spotName) day.spots.push(normalizeSpot({ time: spotTime, name: spotName, duration }));
     });
@@ -718,12 +751,21 @@ function renderDayPage() {
     let transitHtml = '';
     if (idx < dayData.spots.length - 1) {
       const nextSpot = dayData.spots[idx + 1];
-      const transitUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(cleanName)}&destination=${encodeURIComponent(cleanSpotName(nextSpot.name))}&travelmode=transit`;
+      const nextName = cleanSpotName(nextSpot.name);
+      const routeBase = 'https://www.google.com/maps/dir/?api=1';
+      const routeModes = [
+        { mode: 'transit', label: '🚆 大眾運輸' },
+        { mode: 'driving', label: '🚗 開車' },
+        { mode: 'walking', label: '🚶 步行' }
+      ];
+      const routeButtons = routeModes.map(({ mode, label }) => {
+        const url = `${routeBase}&origin=${encodeURIComponent(cleanName)}&destination=${encodeURIComponent(nextName)}&travelmode=${mode}`;
+        return `<a href=\"${url}\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:#fff;border:1px solid #d9e2ec;color:#31506b;border-radius:8px;padding:7px 9px;font-size:12px;font-weight:700;\">${label}</a>`;
+      }).join('');
       transitHtml = `
-        <div class="transit-box">
-          <a href="${transitUrl}" target="_blank" class="transit-btn">
-            🚌 前往「${escapeHtml(cleanSpotName(nextSpot.name))}」交通路線 ➔
-          </a>
+        <div class=\"transit-box\" style=\"margin:6px 0 12px 0;padding:10px 12px;background:#f7f9fc;border:1px solid #e5eaf0;border-radius:10px;\">
+          <div style=\"font-size:12px;font-weight:800;color:#52606d;margin-bottom:8px;\">🧭 前往「${escapeHtml(nextName)}」</div>
+          <div style=\"display:flex;gap:7px;flex-wrap:wrap;\">${routeButtons}</div>
         </div>
       `;
     }
@@ -774,7 +816,7 @@ function renderDayPage() {
           <input type="file" id="input_${idx}" class="file-input" accept="image/*" onchange="handlePhotoUpload(event, '${photoKey}', 'preview_${idx}')">
         </div>
 
-        <a href="${mapUrl}" target="_blank" class="map-btn hide-on-export">📍 Google 地圖導航與評價</a>
+        <a href="${mapUrl}" target="_blank" class="map-btn hide-on-export">📍 在 Google 地圖查看</a>
       </div>
       ${transitHtml}
     `;
@@ -787,6 +829,7 @@ function renderDayPage() {
       }
     });
   });
+
 
   let addSpotBtn = document.getElementById('addSpotBtn');
   if (!addSpotBtn) {
