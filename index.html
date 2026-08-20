@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的旅遊小書 - 行程列表</title>
+  <style>
+    :root {
+      --primary: #c2593f;
+      --bg: #f5eedc;
+      --card: #fffdfa;
+      --text: #2c2523;
+      --sub-text: #7c6f66;
+      --border-dashed: #d8c8b8;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", sans-serif;
+      background-color: var(--bg);
+      background-image: radial-gradient(#e2d5c3 1px, transparent 1px);
+      background-size: 16px 16px;
+      margin: 0;
+      padding: 24px 16px;
+      color: var(--text);
+    }
+    .book-container {
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--card);
+      min-height: 90vh;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(70, 50, 40, 0.08), 0 0 0 1px rgba(200, 180, 160, 0.3);
+      padding: 28px 20px;
+      box-sizing: border-box;
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 18px;
+      margin-bottom: 24px;
+      border-bottom: 2px dashed var(--border-dashed);
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 800;
+      margin: 0;
+      color: var(--primary);
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--sub-text);
+      margin-top: 6px;
+    }
+    .trip-card {
+      background: #faf6f0;
+      border: 1px solid var(--border-dashed);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .action-btn {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .add-btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .add-btn {
+      flex: 1;
+      background: #fdf5e6;
+      color: var(--primary);
+      border: 2px dashed #ebd3b0;
+      padding: 12px;
+      border-radius: 16px;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* 彈窗樣式 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      width: 85%;
+      max-width: 400px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body>
+
+<div class="book-container">
+  <div class="header">
+    <h1 class="title">📖 我的旅遊小書</h1>
+    <div class="subtitle">隨身口袋行程 · 隨時紀錄旅行點滴</div>
+  </div>
+
+  <div class="add-btn-group">
+    <button id="addTripBtn" class="add-btn">➕ 手動建立行程</button>
+    <button id="parseTripBtn" class="add-btn" style="background:#f3f8f2; color:#2e7d32; border-color:#c0d8bd;">✨ 文字解析新行程</button>
+  </div>
+
+  <div id="tripList"></div>
+</div>
+
+<!-- 🌟 智能行程文字解析 Modal 彈窗 -->
+<div id="parseModal" class="modal-overlay">
+  <div class="modal-content">
+    <h3 style="margin-top:0; color:var(--primary);">✨ 貼上行程文字自動解析</h3>
+    <p style="font-size:12px; color:var(--sub-text);">格式範例：<br>Day 1: 大阪城 → 心齋橋<br>Day 2: 環球影城</p>
+    <textarea id="parseInput" rows="8" placeholder="第一行為行程標題（例如：東京 5 日自由行）&#10;Day 1: 抵達東京&#10;12:00 成田機場 → 14:30 飯店 Check-in (1小時) → 16:00 淺草寺 (2小時)" style="width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 13px;"></textarea>
+    <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
+      <button id="closeModalBtn" style="background:#eee; border:none; padding:8px 14px; border-radius:8px; cursor:pointer;">取消</button>
+      <button id="submitParseBtn" style="background:var(--primary); color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">開始建立</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
